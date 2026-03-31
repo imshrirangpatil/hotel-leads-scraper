@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Runtime outputs
+csv_exports/
+screenshots/
+
+# Local secrets/env files
+.env
+.env.*
