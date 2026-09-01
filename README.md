@@ -1,149 +1,113 @@
 # Hotel Project Leads Scraper
 
-Automated Python script to extract hotel project leads from hotelprojectleads.com
-in batches of 15, download each batch as CSV, then merge into one master file.
+Automates hotel project lead extraction from [hotelprojectleads.com](https://hotelprojectleads.com): login, search, mark 15 leads per page, download CSV per batch, merge into one master file.
 
-## Project Structure
+## Quick start
+
+```bash
+cd hotel_leads_scraper
+bash setup_after_reboot.sh   # first time only (Python 3.11+ venv)
+
+source .venv/bin/activate
+export HPL_USERNAME="your_email"
+export HPL_PASSWORD="your_password"
+
+python3 -u scraper.py
+python3 merge_csvs.py
+```
+
+Or: `bash run.sh` (requires credentials in env).
+
+## Environment variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `HPL_USERNAME` | — | **Required** login email |
+| `HPL_PASSWORD` | — | **Required** login password |
+| `HPL_FROM_DATE` | `2026-03-01` | Search from date (`yyyy-mm-dd`) |
+| `HPL_OUTPUT_DIR` | `csv_exports` | Batch CSV folder (use `csv_exports_aug2026` for incremental runs) |
+| `HPL_MASTER_DIR` | `csv_exports` | Where `hotel_leads_MASTER.csv` is written |
+| `HPL_START_PAGE` | `1` | Resume from this results page |
+| `HPL_MAX_PAGES` | all | Limit pages per run (testing). **Unset for full runs.** |
+| `HPL_AUTO_RESUME` | off | Set `1` to auto-detect next page from highest batch in `HPL_OUTPUT_DIR` |
+| `HPL_INCLUDE_EXPIRED` | off | Set `1` to check "Include expired leads" |
+| `HPL_HEADLESS` | off | Set `1` to run browser in background |
+
+**toDate** is always set to **today** when the scraper runs.
+
+## Common workflows
+
+### Full run (first time)
+
+```bash
+export HPL_FROM_DATE=2026-03-01
+export HPL_OUTPUT_DIR=csv_exports
+unset HPL_MAX_PAGES
+unset HPL_START_PAGE
+python3 -u scraper.py
+python3 merge_csvs.py
+```
+
+### Incremental run (new leads since last scrape)
+
+```bash
+export HPL_FROM_DATE=2026-07-31      # day after last full scrape
+export HPL_OUTPUT_DIR=csv_exports_aug2026
+unset HPL_START_PAGE
+unset HPL_MAX_PAGES
+python3 -u scraper.py
+python3 merge_csvs.py                # merges csv_exports + csv_exports_*
+```
+
+### Resume after crash
+
+```bash
+bash resume.sh                       # prints export HPL_START_PAGE=N
+# or
+export HPL_AUTO_RESUME=1             # auto-detect from batch files
+python3 -u scraper.py
+```
+
+Progress is saved to `scrape_progress.json` after each batch.
+
+### Test one page
+
+```bash
+export HPL_MAX_PAGES=1
+python3 -u scraper.py
+unset HPL_MAX_PAGES                  # before full run!
+```
+
+## Project structure
 
 ```
 hotel_leads_scraper/
-├── config.py           # All settings: credentials, batch size, URLs
-├── scraper.py          # Main automation script (Playwright)
-├── merge_csvs.py       # Merge all batch CSVs into one master file
-├── requirements.txt    # Python dependencies
-├── README.md           # This file
-├── csv_exports/        # Downloaded CSV files (created automatically)
-└── screenshots/        # Debug screenshots (created automatically)
+├── scraper.py              # Main Playwright automation
+├── config.py               # Settings (overridden by env vars)
+├── merge_csvs.py           # Merge all batch CSVs → MASTER
+├── run.sh                  # Install + scrape + merge
+├── setup_after_reboot.sh   # Fresh venv + Playwright (after Mac reboot)
+├── fix_playwright.sh       # Repair stuck Playwright driver
+├── resume.sh               # Show next HPL_START_PAGE from batch files
+├── csv_exports/            # Primary batch output
+├── csv_exports_*/          # Incremental run folders
+└── scrape_progress.json    # Last completed page (auto-written)
 ```
-
-## Setup
-
-### 1. (Recommended) Create a virtual environment (no Conda required)
-
-```bash
-cd /Users/samarthpatil/Desktop/hotel_leads_scraper
-
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-Each time you come back to the project, re-activate it with:
-
-```bash
-cd /Users/samarthpatil/Desktop/hotel_leads_scraper
-source .venv/bin/activate
-```
-
-### 2. Install Python dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Install Playwright browsers
-
-```bash
-python -m playwright install chromium
-```
-
-### 4. Configure credentials
-
-Set your Hotel Project Leads credentials via environment variables (recommended and required):
-
-```python
-HPL_USERNAME = "your_email@example.com"
-HPL_PASSWORD = "your_password"
-```
-
-The scraper will exit with an error if these variables are not set.
-
-```bash
-export HPL_USERNAME="your_email@example.com"
-export HPL_PASSWORD="your_password"
-```
-
-### 5. Adjust settings (optional)
-
-In `config.py`:
-- `BATCH_SIZE` = 15 (leads per CSV, max 20)
-- `MAX_PAGES` = None (set to a number to limit, e.g. 5 for testing)
-- You can also override `MAX_PAGES` via the `HPL_MAX_PAGES` environment variable, e.g.:
-
-  ```bash
-  export HPL_MAX_PAGES=1  # Only process the first page
-  ```
-- `SEARCH_FROM_DATE` = "2025-01-01"
-
-## Usage
-
-### Step 1: Run the scraper
-
-```bash
-python scraper.py
-```
-
-This will:
-1. Log in to hotelprojectleads.com
-2. Run a search with your filters
-3. Open each lead, click Mark, return to results
-4. After 15 leads, download the batch CSV
-5. Move to the next page and repeat
-6. Save all CSVs to `csv_exports/`
-
-### Step 2: Merge all CSVs
-
-```bash
-python merge_csvs.py
-```
-
-This creates `csv_exports/hotel_leads_MASTER.csv` with all leads combined.
-
-### Step 3: Import into Clay
-
-Upload `hotel_leads_MASTER.csv` to Clay for enrichment.
-
-## Full run (9000+ leads)
-
-- **Yes, you can run it for all results.** Remove or leave `HPL_MAX_PAGES` unset so the scraper processes every page.
-- **Rough time:** ~3–6+ minutes per batch (15 leads). For 9000 leads (~600 batches) that’s on the order of **30–60+ hours**. Run on a stable connection and avoid closing the browser or machine.
-- **Optional:** In `scraper.py` set `headless=True` for long runs so the browser runs in the background.
-- **Chunked runs (recommended for 602 pages):** Use `HPL_START_PAGE` and `HPL_MAX_PAGES` so each run processes a range of pages. Batch files are named by global page number (e.g. `hotel_leads_batch_0101.csv` … `hotel_leads_batch_0200.csv`). Run each chunk, then run merge once at the end (or after each chunk to inspect). Example:
-
-  | Chunk | Pages    | Command |
-  |-------|----------|---------|
-  | 1     | 1–100    | `export HPL_START_PAGE=1; export HPL_MAX_PAGES=100; bash run.sh` |
-  | 2     | 101–200  | `export HPL_START_PAGE=101; export HPL_MAX_PAGES=100; bash run.sh` |
-  | 3     | 201–300  | `export HPL_START_PAGE=201; export HPL_MAX_PAGES=100; bash run.sh` |
-  | …     | …        | … |
-  | 7     | 601–602  | `export HPL_START_PAGE=601; export HPL_MAX_PAGES=2; bash run.sh` |
-
-  After all chunks, run `python3 merge_csvs.py` once to build `hotel_leads_MASTER.csv` from all batch files.
-
-## Testing
-
-Start with a small test first:
-
-```python
-# In config.py, set:
-MAX_PAGES = 1  # Only process the first page
-```
-
-Run `python scraper.py`, verify the CSV downloads correctly,
-then remove the limit for the full run.
 
 ## Troubleshooting
 
-- **Login fails**: Check credentials in config.py
-- **Selectors not found**: The site may have changed its HTML structure.
-  Check screenshots/ for debug images and update selectors in scraper.py.
-- **CSV not downloading**: Ensure accept_downloads=True in browser context.
-- **Slow performance**: Reduce ACTION_DELAY and MARK_DELAY in config.py.
+| Problem | Fix |
+|---------|-----|
+| Hangs at "Starting Playwright..." | Reboot Mac, then `bash setup_after_reboot.sh`. Don't Ctrl+C during startup. |
+| `No module named playwright` | Use `.venv`: `source .venv/bin/activate`. Need Python **3.9+** (not system 3.7). |
+| Only 1 page scraped | `HPL_MAX_PAGES=1` still set — run `unset HPL_MAX_PAGES` |
+| 0 leads on resume page | Wrong `HPL_START_PAGE` for a **new** date search — use page `1` |
+| `ERR_HTTP2` / network errors | Scraper retries 3×; resume with `bash resume.sh` |
+| Playwright driver stuck | `bash fix_playwright.sh` or reboot + `setup_after_reboot.sh` |
 
 ## Notes
 
-- The site limits CSV downloads to 20 leads at a time.
-- BATCH_SIZE=15 matches the visible results per page.
-- The scraper runs in visible browser mode by default.
-  Set `headless=True` in scraper.py for production runs.
-- Selectors may need adjustment based on actual site HTML.
-  Run a test batch first and check screenshots.
+- Site limit: ~20 marked leads per CSV download; batch size is 15.
+- Resume uses **pagination clicks**, not URL jumps (more reliable).
+- Merge dedupes on hotel name + city + state + project scope.
+- Upload `csv_exports/hotel_leads_MASTER.csv` to Clay for enrichment.

@@ -5,7 +5,9 @@ __pycache__/
 
 # Runtime outputs
 csv_exports/
+csv_exports_*/
 screenshots/
+scrape_progress.json
 
 # Local secrets/env files
 .env

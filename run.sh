@@ -1,34 +1,37 @@
 #!/bin/bash
-# Quick start script
-
+# Quick start — use project venv and Python 3.11+
 set -e
+
+cd "$(dirname "$0")"
 
 echo "=== Hotel Project Leads Scraper ==="
 echo ""
 
-# Check Python 3
-if ! command -v python3 &> /dev/null; then
-    echo "ERROR: Python 3 is required."
-    exit 1
+if [[ ! -d .venv ]]; then
+  echo "No .venv found. Run: bash setup_after_reboot.sh"
+  exit 1
 fi
 
-# Check pip3
-if ! command -v pip3 &> /dev/null; then
-    echo "ERROR: pip3 is required."
-    exit 1
+source .venv/bin/activate
+
+if ! python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)"; then
+  echo "ERROR: Python 3.9+ required. Run: bash setup_after_reboot.sh"
+  exit 1
 fi
 
-# Install dependencies
+if [[ -z "$HPL_USERNAME" || -z "$HPL_PASSWORD" ]]; then
+  echo "ERROR: Set HPL_USERNAME and HPL_PASSWORD before running."
+  exit 1
+fi
+
 echo "[1/3] Installing dependencies..."
-pip3 install -r requirements.txt
+pip install -q -r requirements.txt
 python3 -m playwright install chromium
 
-# Run scraper (all pages; for a test run set e.g. export HPL_MAX_PAGES=5 before this)
 echo ""
 echo "[2/3] Starting scraper..."
-python3 scraper.py
+python3 -u scraper.py
 
-# Merge CSVs
 echo ""
 echo "[3/3] Merging CSV files..."
 python3 merge_csvs.py
